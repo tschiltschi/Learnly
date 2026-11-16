@@ -79,7 +79,7 @@ Without configuration Learnly stays a browser-only demo. With it:
 
 Database schema and row level security: `supabase/migrations/`. Frontend glue: `src/services/backend/` (`BackendSync` loads and saves the state, `usePlanActions` picks demo, Stripe or disabled buttons).
 
-Step-by-step setup (in German): [docs/EINRICHTUNG.md](docs/EINRICHTUNG.md). Environment variables: [.env.example](.env.example).
+Step-by-step setup in the browser only (in German): [docs/EINRICHTUNG.md](docs/EINRICHTUNG.md). Database and functions deploy from GitHub Actions (`.github/workflows/supabase-deploy.yml`) on every push to main that touches `supabase/`. Environment variables: [.env.example](.env.example).
 
 ## Languages (English / Deutsch)
 
