@@ -56,21 +56,30 @@ All AI calls go through one interface, `src/services/ai/types.ts` (`AIProvider`)
 chat()               -> AI Learning Coach
 generateFlashcards() -> Theory "Generate flashcards"
 suggestStudyPlan()   -> Learning Plan "Suggest sessions"
-voiceTurn()          -> Voice Mode (around your speech-to-text / text-to-speech)
+voiceTurn()          -> Voice Mode (browser speech-to-text and text-to-speech around it)
 analyzeDocument()    -> Premium document analysis
 ```
 
-- `demoProvider.ts`: the current demo implementation.
-- `httpProvider.ts`: a ready production provider that POSTs to your backend (`/api/ai/chat`, `/flashcards`, `/plan`, `/voice`, `/document`).
+- `demoProvider.ts`: the demo implementation (scripted samples, rule-based generators, all labelled "Demo").
+- `httpProvider.ts`: the production provider. It POSTs to the Supabase `ai` function (`supabase/functions/ai`), which calls Claude with the key stored on the server, checks the plan and counts Free generations.
 
-To switch, set in `.env`:
+Set `VITE_AI_PROVIDER=http` to switch. `VITE_AI_BASE_URL` can point at a different backend that implements the same routes.
 
-```
-VITE_AI_PROVIDER=http
-VITE_AI_BASE_URL=https://api.your-domain.com/ai
-```
+## Going live: Supabase, Stripe and Claude
 
-Keep model API keys on the backend, never in the frontend. The backend should also enforce Free/Premium quotas.
+Without configuration Learnly stays a browser-only demo. With it:
+
+| Part | Where | What it does |
+|---|---|---|
+| Accounts | Supabase Auth | Email and password (with confirmation and password reset), optional Google |
+| Data sync | `app_state` table | The whole learning state per user as JSON, saved 1.5 s after each change |
+| Plan | `profiles.plan` | Written only by the Stripe webhook; the browser can read it, not change it |
+| Payments | `create-checkout`, `customer-portal`, `stripe-webhook` | Stripe Checkout subscription, self-service cancel, plan updates |
+| AI | `ai` | Claude for coach, voice, flashcards, plan and document summaries; Premium checks and the Free limit on the server |
+
+Database schema and row level security: `supabase/migrations/`. Frontend glue: `src/services/backend/` (`BackendSync` loads and saves the state, `usePlanActions` picks demo, Stripe or disabled buttons).
+
+Step-by-step setup in the browser only (in German): [docs/EINRICHTUNG.md](docs/EINRICHTUNG.md). Database and functions deploy from GitHub Actions (`.github/workflows/supabase-deploy.yml`) on every push to main that touches `supabase/`. Environment variables: [.env.example](.env.example).
 
 ## Languages (English / Deutsch)
 

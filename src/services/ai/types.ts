@@ -21,7 +21,7 @@ export interface AIProvider {
   suggestStudyPlan(input: { exams: Exam[]; dailyMinutes: number; existing: PlanSession[]; language: Language }): Promise<AIGenerationResult<Omit<PlanSession, 'id'>>>;
 
   /** One spoken turn in Voice Mode (speech-to-text and text-to-speech happen around it). */
-  voiceTurn(input: { subject: string; transcript: string; language: Language }): Promise<AIChatReply>;
+  voiceTurn(input: { subject: string; transcript: string; language: Language; history?: Pick<ChatMessage, 'role' | 'content'>[] }): Promise<AIChatReply>;
 
   /** Deep analysis of an uploaded document (Premium). */
   analyzeDocument(input: { fileName: string; text?: string; language?: Language }): Promise<AIDocumentAnalysis>;

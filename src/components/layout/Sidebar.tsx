@@ -10,7 +10,7 @@ import { PremiumBadge } from '../ui/Badge';
 import { ProgressBar } from '../ui/Progress';
 
 export function Sidebar({ active, onNavigate }: { active: string; onNavigate?: () => void }) {
-  const { state, isPremium, openUpgrade, update } = useStore();
+  const { state, isPremium, openUpgrade, signOut } = useStore();
   const t = useT();
   const ov = overview(state);
   const goalPct = Math.min(100, Math.round((ov.todayMinutes / state.settings.dailyGoal) * 100));
@@ -101,8 +101,8 @@ export function Sidebar({ active, onNavigate }: { active: string; onNavigate?: (
             <div className="text-[11px] text-fog-500">{isPremium ? t('Premium plan') : t('Free plan')}</div>
           </div>
           <button
-            onClick={() => {
-              update((s) => ({ ...s, user: null }));
+            onClick={async () => {
+              await signOut();
               navigate('login');
             }}
             className="rounded-lg p-1.5 text-fog-500 transition hover:bg-white/5 hover:text-fog-200"

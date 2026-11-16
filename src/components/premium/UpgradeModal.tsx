@@ -1,20 +1,16 @@
 import { useT } from '@/i18n';
-import { Check, Crown, FlaskConical } from 'lucide-react';
+import { Check, Crown, FlaskConical, Lock } from 'lucide-react';
 import { useStore } from '@/store/AppStore';
 import { navigate } from '@/lib/router';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { PREMIUM_PERKS } from './plans';
+import { usePlanActions } from '@/services/backend/usePlanActions';
 
 export function UpgradeModal() {
-  const { upgradeOpen, closeUpgrade, update, toast } = useStore();
+  const { upgradeOpen, closeUpgrade } = useStore();
   const t = useT();
-
-  const activate = () => {
-    update((s) => ({ ...s, plan: 'premium' }));
-    closeUpgrade();
-    toast(t('Premium activated (demo, no payment taken)'));
-  };
+  const plan = usePlanActions();
 
   return (
     <Modal open={upgradeOpen.open} onClose={closeUpgrade} className="sm:max-w-[460px]">
@@ -43,13 +39,21 @@ export function UpgradeModal() {
         ))}
       </ul>
       <div className="space-y-3 px-6 pb-6 pt-6">
-        <Button variant="premium" size="lg" className="w-full" onClick={activate} icon={<Crown className="h-4 w-4" />}>
-          {t('Activate Premium (demo)')}
+        <Button variant="premium" size="lg" className="w-full" onClick={plan.upgrade} loading={plan.busy} disabled={plan.mode === 'unavailable'} icon={<Crown className="h-4 w-4" />}>
+          {plan.upgradeLabel}
         </Button>
-        <div className="flex items-start gap-2 rounded-xl border border-dashed border-sky-300/30 bg-sky-400/[0.05] px-3 py-2.5 text-xs text-sky-100/80">
-          <FlaskConical className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-300" />
-          {t('No payment provider is connected. This switches your account to Premium in this browser so you can try every feature. You can switch back in Settings.')}
-        </div>
+        {plan.mode === 'stripe' ? (
+          <p className="flex items-center justify-center gap-1.5 text-xs text-fog-400">
+            <Lock className="h-3 w-3" /> {t('Secure payment with Stripe. Cancel anytime in Settings.')}
+          </p>
+        ) : (
+          <div className="flex items-start gap-2 rounded-xl border border-dashed border-sky-300/30 bg-sky-400/[0.05] px-3 py-2.5 text-xs text-sky-100/80">
+            <FlaskConical className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-300" />
+            {plan.mode === 'demo'
+              ? t('No payment provider is connected. This switches your account to Premium in this browser so you can try every feature. You can switch back in Settings.')
+              : t('Premium can be bought as soon as payments are connected.')}
+          </div>
+        )}
         <button
           onClick={() => {
             closeUpgrade();

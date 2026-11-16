@@ -6,6 +6,7 @@ import { navigate } from '@/lib/router';
 import { Button } from '@/components/ui';
 import { Logo } from '@/components/layout/Logo';
 import { LanguageSwitch } from '@/components/LanguageSwitch';
+import { BACKEND, supabase } from '@/services/backend';
 
 export function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
   const { update, state } = useStore();
@@ -15,6 +16,45 @@ export function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [info, setInfo] = useState('');
+  const redirectTo = window.location.origin + window.location.pathname;
+
+  const authError = (message: string) => {
+    if (/invalid login credentials/i.test(message)) return t('Email or password is wrong.');
+    if (/already registered|already exists/i.test(message)) return t('There is already an account with this email. Sign in instead.');
+    if (/email not confirmed/i.test(message)) return t('Please confirm your email first. We sent you a link when you signed up.');
+    return t('Sign-in failed: {m}', { m: message });
+  };
+
+  /** Real account through Supabase. BackendSync loads the data and opens the dashboard once signed in. */
+  const backendSubmit = async () => {
+    if (!supabase) return;
+    setLoading(true);
+    if (mode === 'signup') {
+      const { data, error: err } = await supabase.auth.signUp({ email: email.trim(), password, options: { data: { first_name: name.trim() }, emailRedirectTo: redirectTo } });
+      if (err) setError(authError(err.message));
+      else if (!data.session) setInfo(t('Almost done: we sent you an email. Open the link in it to confirm your account.'));
+    } else {
+      const { error: err } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (err) setError(authError(err.message));
+    }
+    setLoading(false);
+  };
+
+  const google = async () => {
+    if (!supabase) return signIn('Alex', 'alex.student@example.com');
+    const { error: err } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } });
+    if (err) setError(authError(err.message));
+  };
+
+  const forgotPassword = async () => {
+    setError('');
+    if (!supabase) return;
+    if (!/^\S+@\S+\.\S+$/.test(email)) return setError(t('Enter your email address first.'));
+    const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: redirectTo + '#preferences' });
+    if (err) setError(authError(err.message));
+    else setInfo(t('We sent you a link. After opening it, choose a new password in Settings.'));
+  };
 
   const signIn = (n: string, e: string) => {
     setLoading(true);
@@ -27,9 +67,11 @@ export function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
   const submit = (ev: FormEvent) => {
     ev.preventDefault();
     setError('');
+    setInfo('');
     if (mode === 'signup' && name.trim().length < 2) return setError(t('Please enter your first name.'));
     if (!/^\S+@\S+\.\S+$/.test(email)) return setError(t('Please enter a valid email address, like name@school.com.'));
     if (password.length < 6) return setError(t('Your password needs at least 6 characters.'));
+    if (BACKEND.enabled) return void backendSubmit();
     const display = mode === 'signup' ? name.trim() : email.split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
     signIn(display, email.trim());
   };
@@ -88,7 +130,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
 
           <button
             type="button"
-            onClick={() => signIn('Alex', 'alex.student@example.com')}
+            onClick={google}
             className="mt-7 flex h-11 w-full items-center justify-center gap-2.5 rounded-xl border border-white/10 bg-white/[0.04] text-sm font-medium text-fog-100 transition hover:bg-white/[0.08]"
           >
             <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true">
@@ -124,7 +166,14 @@ export function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
                 <label htmlFor="auth-password" className="label">
                   {t('Password')}
                 </label>
-                {mode === 'login' && <span className="mb-1.5 text-xs text-fog-500">{t('At least 6 characters')}</span>}
+                {mode === 'login' &&
+                  (BACKEND.enabled ? (
+                    <button type="button" onClick={forgotPassword} className="mb-1.5 text-xs text-brand-300 hover:text-brand-200">
+                      {t('Forgot password?')}
+                    </button>
+                  ) : (
+                    <span className="mb-1.5 text-xs text-fog-500">{t('At least 6 characters')}</span>
+                  ))}
               </div>
               <input
                 id="auth-password"
@@ -137,6 +186,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
               />
             </div>
             {error && <p className="rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-200">{error}</p>}
+            {info && <p className="rounded-lg bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">{info}</p>}
             <Button type="submit" size="lg" className="w-full" loading={loading}>
               {mode === 'login' ? t('Sign in') : t('Create free account')}
               {!loading && <ArrowRight className="h-4 w-4" />}
@@ -160,10 +210,12 @@ export function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
             </button>
           </p>
 
-          <div className="mt-8 flex items-start gap-2 rounded-xl border border-dashed border-sky-300/25 bg-sky-400/[0.04] px-3 py-2.5 text-[11px] leading-relaxed text-sky-100/70">
-            <FlaskConical className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-300" />
-            {t('Demo sign-in: no server is connected, so any email and password work and your account lives only in this browser.')}
-          </div>
+          {!BACKEND.enabled && (
+            <div className="mt-8 flex items-start gap-2 rounded-xl border border-dashed border-sky-300/25 bg-sky-400/[0.04] px-3 py-2.5 text-[11px] leading-relaxed text-sky-100/70">
+              <FlaskConical className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-300" />
+              {t('Demo sign-in: no server is connected, so any email and password work and your account lives only in this browser.')}
+            </div>
+          )}
         </div>
       </div>
     </div>

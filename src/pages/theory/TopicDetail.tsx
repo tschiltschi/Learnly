@@ -6,6 +6,7 @@ import { navigate } from '@/lib/router';
 import { cn, fileSize, relativeTime, uid } from '@/lib/utils';
 import { masteryOf } from '@/lib/srs';
 import { ai } from '@/services/ai';
+import { aiErrorMessage } from '@/services/ai/httpProvider';
 import type { ExtractedCard } from '@/lib/cardExtractor';
 import { Badge, Button, Card, ConfirmDialog, DemoBadge, EmptyState, Modal, PageHeader, ProgressBar, ProgressRing, Segmented } from '@/components/ui';
 import { LockedFeature } from '@/components/premium/PremiumLock';
@@ -201,8 +202,8 @@ function GenerateModal({ open, onClose, topic, patch, onAdded }: { open: boolean
       const existing = new Set(topic.cards.map((c) => c.front.toLowerCase()));
       setItems(res.items.map((i) => ({ ...i, keep: !existing.has(i.front.toLowerCase()) })));
       setMethod(res.method);
-    } catch {
-      toast(tr('Generation failed. Please try again.'), 'error');
+    } catch (err) {
+      toast(ai.isDemo ? tr('Generation failed. Please try again.') : aiErrorMessage(err, tr.lang), 'error');
     } finally {
       setLoading(false);
     }
@@ -492,8 +493,12 @@ function DocumentsTab({ topic, patch }: { topic: TheoryTopic; patch: Patch }) {
                     size="sm"
                     variant="ghost"
                     onClick={async () => {
-                      const r = await ai.analyzeDocument({ fileName: d.name });
-                      setAnalysis(r.available ? r.summary ?? '' : tr(r.notice ?? ''));
+                      try {
+                        const r = await ai.analyzeDocument({ fileName: d.name, language: tr.lang });
+                        setAnalysis(r.available ? [r.summary, ...(r.keyConcepts ?? []).map((k) => '• ' + k)].filter(Boolean).join('\n') : tr(r.notice ?? ''));
+                      } catch (err) {
+                        setAnalysis(aiErrorMessage(err, tr.lang));
+                      }
                     }}
                     icon={<ScanSearch className="h-3.5 w-3.5" />}
                   >
@@ -512,7 +517,7 @@ function DocumentsTab({ topic, patch }: { topic: TheoryTopic; patch: Patch }) {
       <Modal open={analysis !== null} onClose={() => setAnalysis(null)} title={tr('Document analysis')}>
         <div className="px-6 pb-6 pt-2">
           <DemoBadge className="mb-3" />
-          <p className="text-sm text-fog-300">{analysis}</p>
+          <p className="whitespace-pre-line text-sm text-fog-300">{analysis}</p>
         </div>
       </Modal>
     </div>
