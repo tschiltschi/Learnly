@@ -1,0 +1,83 @@
+import type { VocabList, VocabWord } from '@/types';
+
+const w = (id: string, term: string, translation: string, note?: string): VocabWord => ({
+  id,
+  term,
+  translation,
+  note,
+  correct: 0,
+  wrong: 0,
+  box: 0,
+  due: 0,
+});
+
+export function sampleVocabLists(now = Date.now()): VocabList[] {
+  return [
+    {
+      id: 'food01',
+      name: 'Food & Drink',
+      sourceLang: 'English',
+      targetLang: 'German',
+      description: 'Everyday words for the kitchen, the café and the supermarket.',
+      createdAt: now - 9 * 86400000,
+      updatedAt: now - 1 * 86400000,
+      sample: true,
+      words: [
+        w('f1', 'Apple', 'Apfel', 'der Apfel, die Äpfel'),
+        w('f2', 'Bread', 'Brot', 'das Brot'),
+        w('f3', 'Water', 'Wasser', 'das Wasser'),
+        w('f4', 'Cheese', 'Käse', 'der Käse'),
+        w('f5', 'Milk', 'Milch', 'die Milch'),
+        w('f6', 'Strawberry', 'Erdbeere', 'die Erdbeere, -n'),
+        w('f7', 'Breakfast', 'Frühstück', 'das Frühstück'),
+        w('f8', 'Knife', 'Messer', 'das Messer'),
+        w('f9', 'Fork', 'Gabel', 'die Gabel'),
+        w('f10', 'Cup', 'Tasse', 'die Tasse'),
+        w('f11', 'Vegetables', 'Gemüse', 'das Gemüse (no plural)'),
+        w('f12', 'Bill (restaurant)', 'Rechnung', 'die Rechnung'),
+      ].map((x, i) => ({ ...x, correct: [3, 4, 5, 1, 2, 0, 2, 1, 0, 3, 0, 1][i], wrong: [0, 1, 0, 2, 1, 2, 1, 0, 1, 0, 2, 1][i], box: [3, 3, 4, 1, 2, 0, 2, 1, 0, 3, 0, 1][i] })),
+    },
+    {
+      id: 'travel01',
+      name: 'Travel essentials',
+      sourceLang: 'English',
+      targetLang: 'Spanish',
+      description: 'What you need at the airport, the station and the hotel.',
+      createdAt: now - 6 * 86400000,
+      updatedAt: now - 2 * 86400000,
+      sample: true,
+      words: [
+        w('t1', 'Train station', 'la estación de tren'),
+        w('t2', 'Ticket', 'el billete'),
+        w('t3', 'Airport', 'el aeropuerto'),
+        w('t4', 'Luggage', 'el equipaje'),
+        w('t5', 'Passport', 'el pasaporte'),
+        w('t6', 'Room', 'la habitación'),
+        w('t7', 'Key', 'la llave'),
+        w('t8', 'Departure', 'la salida'),
+        w('t9', 'Arrival', 'la llegada'),
+        w('t10', 'Where is…?', '¿Dónde está…?'),
+      ],
+    },
+    {
+      id: 'verbs01',
+      name: 'Everyday verbs',
+      sourceLang: 'English',
+      targetLang: 'French',
+      description: 'The 8 irregular and regular verbs you will use most.',
+      createdAt: now - 3 * 86400000,
+      updatedAt: now - 3 * 86400000,
+      sample: true,
+      words: [
+        w('v1', 'to be', 'être', 'je suis, tu es, il est'),
+        w('v2', 'to have', 'avoir', "j'ai, tu as, il a"),
+        w('v3', 'to go', 'aller', 'je vais, tu vas, il va'),
+        w('v4', 'to do / to make', 'faire', 'je fais, tu fais, il fait'),
+        w('v5', 'to speak', 'parler'),
+        w('v6', 'to eat', 'manger'),
+        w('v7', 'to want', 'vouloir', 'je veux, tu veux, il veut'),
+        w('v8', 'to know (a fact)', 'savoir'),
+      ],
+    },
+  ];
+}
