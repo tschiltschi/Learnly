@@ -11,6 +11,21 @@ import { PremiumPageGate } from '@/components/premium/PremiumLock';
 type Phase = 'idle' | 'listening' | 'thinking' | 'speaking';
 type Line = { role: 'user' | 'ai'; text: string };
 
+/** The parts of the Web Speech API's SpeechRecognition that Learnly uses (Chrome, Edge and Safari ship it). */
+interface Recognizer {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onerror: ((e: { error: string }) => void) | null;
+  onend: (() => void) | null;
+  start(): void;
+  abort(): void;
+}
+type RecognizerCtor = new () => Recognizer;
+const w = typeof window !== 'undefined' ? (window as unknown as { SpeechRecognition?: RecognizerCtor; webkitSpeechRecognition?: RecognizerCtor }) : {};
+const Recognition = w.SpeechRecognition ?? w.webkitSpeechRecognition;
+
 export function VoicePage() {
   const { isPremium } = useStore();
   if (!isPremium)
@@ -35,7 +50,11 @@ function VoiceView() {
   const timers = useRef<number[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const script = VOICE_SCRIPTS.find((s) => s.subject === subject) ?? VOICE_SCRIPTS[0];
-  const finished = turn >= script.turns.length;
+  // Live mode: the browser turns speech into text, the AI answers, and the browser reads the answer aloud.
+  const live = !ai.isDemo;
+  const finished = !live && turn >= script.turns.length;
+  const recognizer = useRef<Recognizer | null>(null);
+  const [voiceError, setVoiceError] = useState('');
   const canSpeak = typeof window !== 'undefined' && 'speechSynthesis' in window;
 
   const clearTimers = () => {
@@ -53,6 +72,7 @@ function VoiceView() {
   }, [lines, partial]);
 
   const reset = (s = subject) => {
+    recognizer.current?.abort();
     clearTimers();
     setSubject(s);
     setPhase('idle');
@@ -62,6 +82,60 @@ function VoiceView() {
   };
 
   const later = (fn: () => void, ms: number) => timers.current.push(window.setTimeout(fn, ms));
+
+  const say = (text: string, done: () => void) => {
+    if (!speak || !canSpeak || !text) return done();
+    try {
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = tr.lang === 'de' ? 'de-DE' : 'en-US';
+      u.onend = done;
+      u.onerror = done;
+      window.speechSynthesis.speak(u);
+    } catch {
+      done();
+    }
+  };
+
+  const listen = () => {
+    if (phase !== 'idle') {
+      recognizer.current?.abort();
+      clearTimers();
+      setPhase('idle');
+      setPartial('');
+      return;
+    }
+    if (!Recognition) return setVoiceError(tr("Your browser can't turn speech into text. Try Chrome, Edge or Safari."));
+    const rec = new Recognition();
+    rec.lang = tr.lang === 'de' ? 'de-DE' : 'en-US';
+    rec.interimResults = true;
+    rec.continuous = false;
+    let heard = '';
+    rec.onresult = (e) => {
+      heard = Array.from(e.results).map((r) => r[0].transcript).join('');
+      setPartial(heard);
+    };
+    rec.onerror = (e) => {
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') setVoiceError(tr('Allow microphone access to talk to Learnly.'));
+    };
+    rec.onend = async () => {
+      const text = heard.trim();
+      setPartial('');
+      if (!text) return setPhase('idle');
+      const history = lines.map((l) => ({ role: l.role === 'ai' ? ('assistant' as const) : ('user' as const), content: l.text }));
+      setLines((l) => [...l, { role: 'user', text }]);
+      setPhase('thinking');
+      const res = await ai.voiceTurn({ subject, transcript: text, language: tr.lang, history });
+      const answer = res.messages.join(' ') || res.notice || '';
+      setLines((l) => [...l, { role: 'ai', text: answer }]);
+      if (!lines.length) logActivity({ subject: 'voice', title: tr('Voice session: {subject}', { subject: tr(subject) }), detail: tr('Voice Mode'), minutes: 2 });
+      setPhase('speaking');
+      say(answer, () => setPhase('idle'));
+    };
+    recognizer.current = rec;
+    setVoiceError('');
+    setPhase('listening');
+    rec.start();
+  };
 
   // Demo playback of a pre-written exchange. A real integration would stream microphone audio
   // to speech-to-text, send the transcript to ai.voiceTurn() and play back text-to-speech.
@@ -112,7 +186,7 @@ function VoiceView() {
     }, listenEnd + 900);
   };
 
-  const label = tr({ idle: finished ? 'Session complete · tap to restart' : lines.length ? 'Tap to continue' : 'Tap to start', listening: 'Listening…', thinking: 'Thinking…', speaking: 'Learnly is speaking' }[phase]);
+  const label = tr({ idle: finished ? 'Session complete · tap to restart' : live ? 'Tap and speak' : lines.length ? 'Tap to continue' : 'Tap to start', listening: 'Listening…', thinking: 'Thinking…', speaking: 'Learnly is speaking' }[phase]);
 
   return (
     <div className="-mx-4 -mb-16 -mt-6 flex min-h-[calc(100vh-57px)] flex-col sm:-mx-6 lg:-mx-10 lg:-mt-10 lg:min-h-screen">
@@ -153,7 +227,7 @@ function VoiceView() {
             />
             <div className="absolute inset-10 rounded-full bg-[radial-gradient(circle_at_30%_25%,rgba(255,255,255,0.35),transparent_45%)]" />
             <button
-              onClick={play}
+              onClick={live ? listen : play}
               className="relative z-10 grid h-20 w-20 place-items-center rounded-full bg-white/15 text-white ring-1 ring-white/30 backdrop-blur transition hover:scale-105 hover:bg-white/25 active:scale-95"
               aria-label={tr(phase === 'idle' ? 'Start speaking' : 'Stop')}
             >
@@ -161,6 +235,7 @@ function VoiceView() {
             </button>
           </div>
           <div className="relative mt-6 h-6 text-sm font-medium text-fog-200">{label}</div>
+          {voiceError && <p className="relative mt-2 max-w-md text-center text-xs text-rose-300">{voiceError}</p>}
           <div className="relative mt-2 min-h-[48px] max-w-md text-center text-lg text-fog-100">{partial && <span className="animate-fade-up">“{partial}”</span>}</div>
           <p className="relative mt-6 max-w-md text-center text-xs text-fog-500">
             {ai.isDemo
@@ -185,7 +260,7 @@ function VoiceView() {
               <div key={i} className={cn('animate-fade-up', l.role === 'user' && 'text-right')}>
                 <div className="mb-1 flex items-center gap-1.5 text-[11px] text-fog-500" style={{ justifyContent: l.role === 'user' ? 'flex-end' : 'flex-start' }}>
                   {l.role === 'ai' && <Sparkles className="h-3 w-3 text-brand-300" />}
-                  {l.role === 'user' ? tr('You (sample)') : 'Learnly'}
+                  {l.role === 'user' ? (live ? tr('You') : tr('You (sample)')) : 'Learnly'}
                 </div>
                 <div className={cn('inline-block max-w-[90%] rounded-2xl px-3.5 py-2.5 text-left text-sm', l.role === 'user' ? 'rounded-br-md bg-brand-600 text-white' : 'rounded-tl-md border border-white/[0.07] bg-ink-850 text-fog-200')}>{l.text}</div>
               </div>

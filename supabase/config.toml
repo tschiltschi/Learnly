@@ -1,0 +1,10 @@
+# Supabase CLI settings for Learnly. Only the parts that differ from the defaults are listed.
+project_id = "learnly"
+
+[auth]
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:5173", "http://localhost:4173"]
+
+# Stripe calls this function without a Supabase login; it checks Stripe's signature instead.
+[functions.stripe-webhook]
+verify_jwt = false

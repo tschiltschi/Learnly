@@ -4,6 +4,7 @@ import { createInitialState, STATE_VERSION } from '@/data/seed';
 import { loadJSON, saveJSON } from '@/lib/storage';
 import { uid } from '@/lib/utils';
 import { AI_CONFIG } from '@/services/ai/config';
+import { supabase } from '@/services/backend';
 
 const KEY = 'learnly:state:v1';
 
@@ -17,6 +18,8 @@ interface Store {
   isPremium: boolean;
   persisted: boolean;
   resetAll: (withSamples: boolean) => void;
+  /** Signs out of the real account (Supabase) or the browser-only demo account. */
+  signOut: () => Promise<void>;
   upgradeOpen: { open: boolean; feature?: string };
   openUpgrade: (feature?: string) => void;
   closeUpgrade: () => void;
@@ -75,6 +78,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...createInitialState(withSamples, s.settings.language), user: s.user, plan: s.plan, onboarded: true }));
   }, []);
 
+  const signOut = useCallback(async () => {
+    // With a backend, BackendSync clears this browser's copy once Supabase reports the sign-out.
+    if (supabase) await supabase.auth.signOut();
+    else setState((s) => ({ ...s, user: null }));
+  }, []);
+
   const value = useMemo<Store>(
     () => ({
       state,
@@ -85,13 +94,14 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       isPremium,
       persisted,
       resetAll,
+      signOut,
       upgradeOpen,
       openUpgrade: (feature?: string) => setUpgradeOpen({ open: true, feature }),
       closeUpgrade: () => setUpgradeOpen({ open: false }),
       toast,
       toasts,
     }),
-    [state, update, logActivity, consumeGeneration, generationsLeft, isPremium, persisted, resetAll, upgradeOpen, toast, toasts],
+    [state, update, logActivity, consumeGeneration, generationsLeft, isPremium, persisted, resetAll, signOut, upgradeOpen, toast, toasts],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

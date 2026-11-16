@@ -6,6 +6,7 @@ import { navigate } from '@/lib/router';
 import { cn } from '@/lib/utils';
 import { Badge, Button } from '@/components/ui';
 import { COMPARISON, FREE_PERKS, PREMIUM_PERKS } from '@/components/premium/plans';
+import { usePlanActions } from '@/services/backend/usePlanActions';
 
 const FAQ = [
   { q: 'Can I cancel anytime?', a: 'Yes. Premium is billed monthly and you can cancel with one click in Settings. You keep Premium until the end of the month you paid for.' },
@@ -15,9 +16,10 @@ const FAQ = [
 ];
 
 export function PricingPage() {
-  const { isPremium, openUpgrade, update, toast } = useStore();
+  const { isPremium, openUpgrade } = useStore();
   const [open, setOpen] = useState<number | null>(0);
   const tr = useT();
+  const plan = usePlanActions();
 
   return (
     <div>
@@ -45,13 +47,11 @@ export function PricingPage() {
             variant="secondary"
             size="lg"
             className="mt-6 w-full"
-            disabled={!isPremium}
-            onClick={() => {
-              update((s) => ({ ...s, plan: 'free' }));
-              toast(tr('Switched to the Free plan'), 'info');
-            }}
+            disabled={!isPremium || plan.mode === 'unavailable'}
+            loading={isPremium && plan.busy}
+            onClick={plan.downgrade}
           >
-            {isPremium ? tr('Switch to Free') : tr('Your current plan')}
+            {isPremium ? plan.downgradeLabel : tr('Your current plan')}
           </Button>
           <ul className="mt-7 space-y-3">
             {FREE_PERKS.map((p) => (
@@ -134,7 +134,7 @@ export function PricingPage() {
           ))}
         </div>
         <p className="mt-8 text-center text-xs text-fog-500">
-          {tr('Payments are not connected in this demo.')}{' '}
+          {plan.mode === 'stripe' ? tr('Payments are handled securely by Stripe.') : tr('Payments are not connected in this demo.')}{' '}
           <button onClick={() => navigate('preferences')} className="underline hover:text-fog-300">
             {tr('Manage your plan in Settings')}
           </button>

@@ -6,6 +6,7 @@ import { navigate } from '@/lib/router';
 import { cn, uid } from '@/lib/utils';
 import { SUBJECTS } from '@/lib/subjects';
 import { ai } from '@/services/ai';
+import { aiErrorMessage } from '@/services/ai/httpProvider';
 import { Badge, Button, Card, CardHeader, DemoBadge, Modal, PageHeader, ProgressBar } from '@/components/ui';
 import { PremiumPageGate } from '@/components/premium/PremiumLock';
 import type { PlanSession, SubjectKey } from '@/types';
@@ -42,7 +43,13 @@ function PlanView() {
 
   const suggest = async () => {
     setSuggesting(true);
-    const res = await ai.suggestStudyPlan({ language: tr.lang, exams: state.exams, dailyMinutes: state.settings.dailyGoal, existing: state.sessions.filter((s) => !s.suggested) });
+    let res;
+    try {
+      res = await ai.suggestStudyPlan({ language: tr.lang, exams: state.exams, dailyMinutes: state.settings.dailyGoal, existing: state.sessions.filter((s) => !s.suggested) });
+    } catch (err) {
+      setSuggesting(false);
+      return toast(aiErrorMessage(err, tr.lang), 'error');
+    }
     setSessions((ss) => [...ss.filter((s) => !s.suggested), ...res.items.map((i) => ({ ...i, id: uid() }))]);
     setSuggesting(false);
     toast(res.items.length ? tr('{n} sessions suggested', { n: res.items.length }) : tr('Your week is already full'), res.items.length ? 'success' : 'info');

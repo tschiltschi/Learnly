@@ -8,14 +8,18 @@ import { AI_CONFIG } from '@/services/ai/config';
 import { Badge, Button, Card, ConfirmDialog, DemoBadge, PageHeader } from '@/components/ui';
 import { LANGUAGES } from './languages/ListFormModal';
 import { withSampleLanguage } from '@/data/seed';
+import { usePlanActions } from '@/services/backend/usePlanActions';
+import { BACKEND, supabase } from '@/services/backend';
 import { LANGUAGE_OPTIONS, useT, type Lang } from '@/i18n';
 
 export function SettingsPage() {
-  const { state, update, isPremium, openUpgrade, toast, resetAll, generationsLeft } = useStore();
+  const { state, update, isPremium, openUpgrade, toast, resetAll, generationsLeft, signOut } = useStore();
   const [name, setName] = useState(state.user?.name ?? '');
   const [email, setEmail] = useState(state.user?.email ?? '');
   const [confirm, setConfirm] = useState<null | 'samples' | 'empty'>(null);
   const t = useT();
+  const plan = usePlanActions();
+  const [newPassword, setNewPassword] = useState('');
   const s = state.settings;
   const setSetting = <K extends keyof typeof s>(k: K, v: (typeof s)[K]) => update((st) => ({ ...st, settings: { ...st.settings, [k]: v } }));
 
@@ -51,7 +55,7 @@ export function SettingsPage() {
             </div>
             <div>
               <label htmlFor="set-email" className="label">{t('Email')}</label>
-              <input id="set-email" className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+              <input id="set-email" className="input disabled:opacity-60" type="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={BACKEND.enabled} />
             </div>
           </div>
           <div className="mt-4 flex justify-end">
@@ -67,6 +71,30 @@ export function SettingsPage() {
               {t('Save profile')}
             </Button>
           </div>
+          {BACKEND.enabled && (
+            <form
+              className="mt-5 flex flex-col gap-2 border-t border-white/[0.06] pt-5 sm:flex-row sm:items-end"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!supabase) return;
+                if (newPassword.length < 6) return toast(t('Your password needs at least 6 characters.'), 'error');
+                const { error } = await supabase.auth.updateUser({ password: newPassword });
+                if (error) toast(t('Could not change the password: {m}', { m: error.message }), 'error');
+                else {
+                  setNewPassword('');
+                  toast(t('Password changed'));
+                }
+              }}
+            >
+              <div className="flex-1">
+                <label htmlFor="set-password" className="label">{t('New password')}</label>
+                <input id="set-password" className="input" type="password" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="••••••••" />
+              </div>
+              <Button size="sm" variant="secondary" type="submit" disabled={!newPassword}>
+                {t('Change password')}
+              </Button>
+            </form>
+          )}
         </Section>
 
         <Section icon={<Crown className="h-4 w-4" />} title={t('Plan')}>
@@ -76,17 +104,11 @@ export function SettingsPage() {
                 <span className="font-display text-lg font-semibold text-fog-100">{isPremium ? 'Premium' : t('Free')}</span>
                 {isPremium ? <Badge tone="amber">{t('€7.99 / month')}</Badge> : <Badge>{t.lang === 'de' ? '0 €' : '€0'}</Badge>}
               </div>
-              <p className="mt-1 text-sm text-fog-400">{isPremium ? t('All features unlocked. Demo upgrade, no payment taken.') : t('{left} of {total} free generations left this month.', { left: generationsLeft, total: AI_CONFIG.freeMonthlyGenerations })}</p>
+              <p className="mt-1 text-sm text-fog-400">{isPremium ? (plan.mode === 'demo' ? t('All features unlocked. Demo upgrade, no payment taken.') : t('All features unlocked. Thank you for supporting Learnly!')) : t('{left} of {total} free generations left this month.', { left: generationsLeft, total: AI_CONFIG.freeMonthlyGenerations })}</p>
             </div>
             {isPremium ? (
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  update((st) => ({ ...st, plan: 'free' }));
-                  toast(t('Switched back to the Free plan'), 'info');
-                }}
-              >
-                {t('Switch to Free')}
+              <Button variant="secondary" onClick={plan.downgrade} loading={plan.busy} disabled={plan.mode === 'unavailable'}>
+                {plan.downgradeLabel}
               </Button>
             ) : (
               <Button variant="premium" onClick={() => openUpgrade()} icon={<Crown className="h-4 w-4" />}>
@@ -154,8 +176,8 @@ export function SettingsPage() {
 
         <Button
           variant="ghost"
-          onClick={() => {
-            update((st) => ({ ...st, user: null }));
+          onClick={async () => {
+            await signOut();
             navigate('login');
           }}
           icon={<LogOut className="h-4 w-4" />}
